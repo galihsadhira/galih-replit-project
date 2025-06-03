@@ -39,12 +39,7 @@ export function getSizeOptimizedImageUrl(originalUrl, desiredSize) {
             if (!extMatch) return originalUrl;
             const ext = extMatch[1];
             const base = originalUrl.replace(`.${ext}`, '');
-            return `${base}_${desiredSize}.${ext}`;
-        }
-
-        if (url.hostname.includes('pbs.twimg.com')) {
-            url.searchParams.set('name', desiredSize);
-            return url.toString();
+            return `${base}_${desiredSize.toLowerCase()}.${ext}`;
         }
 
         return originalUrl;
@@ -59,12 +54,14 @@ export function getSizeOptimizedImageUrl(originalUrl, desiredSize) {
 export function getDiaryContentSEOAttributes(contentData) {
     if (!contentData || typeof contentData !== 'string') return {};
 
-    const imageMatch = contentData.match(/!\[]\((.*?)\)/);
+    const imageMatch = contentData.match(
+        /!\[.*?\]\((https:\/\/.*?)\)/
+    );
     const text = contentData
-        .replace(/<[^>]+>/g, '') // strip tags
-        .replace(/!\[]\((.*?)\)/g, '') // remove images
-        .replace(/\*\*(.*?)\*\*/g, '$1') // remove bold marks
-        .replace(/#+\s?(.*)/g, '') // remove headers
+        .replace(/<[^>]+>/g, '')
+        .replace(/!\[]\((.*?)\)/g, '')
+        .replace(/\*\*(.*?)\*\*/g, '$1')
+        .replace(/#+\s?(.*)/g, '')
         .trim();
 
     const description = text.split(/\n|\./)[0]?.trim();
@@ -86,57 +83,65 @@ export function getDiaryContentSEOAttributes(contentData) {
  * - \<TiktokEmbed />
  * - \<TwitterEmbed />
  */
-export function renderDiaryContent(contentData) {
-    if (!contentData || typeof contentData !== 'string') return [];
+export function renderDiaryContent(rawContent) {
+    if (!rawContent) return [];
 
-    const lines = contentData
+    const lines = rawContent
         .split('\n')
-        .map((l) => l.trim())
+        .map((line) => line.trim())
         .filter(Boolean);
-    const blocks = [];
+
+    const sections = [];
+    let currentSection = {
+        sectionTitle: null,
+        content: [],
+    };
+
+    const isSectionTitle = (line) => line.startsWith('### ');
+    const isSubSectionTitle = (line) => line.startsWith('## ');
+    const isEmbed = (line) =>
+        (line.startsWith('<YoutubeEmbed') && line.endsWith('/>')) ||
+        (line.startsWith('<InstagramEmbed') && line.endsWith('/>')) ||
+        (line.startsWith('<TiktokEmbed') && line.endsWith('/>')) ||
+        (line.startsWith('<TwitterEmbed') && line.endsWith('/>'));
+    const isImageMarkdown = (line) =>
+        line.startsWith('![') &&
+        line.includes('](') &&
+        line.endsWith(')');
 
     for (const line of lines) {
-        if (line.startsWith('### ')) {
-            blocks.push({
-                type: 'heading',
-                text: line.replace(/^###\s*/, ''),
-            });
-        } else if (/^!\[]\((.*?)\)/.test(line)) {
-            const url = line.match(/^!\[]\((.*?)\)/)?.[1];
-            blocks.push({ type: 'image', url });
-        } else if (line.startsWith('<TiktokEmbed')) {
-            const urlMatch = line.match(/url=\"(.*?)\"/);
-            blocks.push({
-                type: 'embed',
-                platform: 'tiktok',
-                url: urlMatch?.[1],
-            });
-        } else if (line.startsWith('<YoutubeEmbed')) {
-            const urlMatch = line.match(/url=\"(.*?)\"/);
-            blocks.push({
-                type: 'embed',
-                platform: 'youtube',
-                url: urlMatch?.[1],
-            });
-        } else if (line.startsWith('<InstagramEmbed')) {
-            const urlMatch = line.match(/url=\"(.*?)\"/);
-            blocks.push({
-                type: 'embed',
-                platform: 'instagram',
-                url: urlMatch?.[1],
-            });
-        } else if (line.startsWith('<TwitterEmbed')) {
-            const urlMatch = line.match(/url=\"(.*?)\"/);
-            blocks.push({
-                type: 'embed',
-                platform: 'twitter',
-                url: urlMatch?.[1],
-            });
+        if (isSectionTitle(line)) {
+            if (currentSection.content.length) {
+                sections.push(currentSection);
+            }
+            currentSection = {
+                sectionTitle: line.replace(/^###\s*/, '').trim(),
+                content: [],
+            };
+        } else if (isSubSectionTitle(line)) {
+            if (currentSection.content.length) {
+                sections.push(currentSection);
+            }
+            currentSection = {
+                sectionTitle: line.replace(/^##\s*/, '').trim(),
+                content: [],
+            };
+        } else if (isEmbed(line) || isImageMarkdown(line)) {
+            currentSection.content.push(line);
         } else {
-            const cleaned = line.replace(/\*\*(.*?)\*\*/g, '$1');
-            blocks.push({ type: 'paragraph', text: cleaned });
+            const processed = line.replace(/\*\*(.*?)\*\*/g, '$1');
+            const splitParentheses = processed
+                .split(/(\(.*?\))/g)
+                .filter(Boolean);
+            currentSection.content.push(
+                ...splitParentheses.map((s) => s.trim())
+            );
         }
     }
 
-    return blocks;
+    if (currentSection.content.length) {
+        sections.push(currentSection);
+    }
+
+    return sections;
 }

@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { getDiaryFeed } from '../app/api/cms';
 import { Card, Row, Col } from 'antd';
 import Link from 'next/link';
-
+import { getSizeOptimizedImageUrl } from '../utils/cms';
+import PageHeader from './components/PageHeader';
 export default function HomePage() {
     const [diaries, setDiaries] = useState<any[]>([]);
     const [page, setPage] = useState(0);
@@ -35,12 +36,11 @@ export default function HomePage() {
 
     return (
         <div className="p-4">
-            <Card className="shadow-md">
-                <div className="px-2 py-1">
-                    <h2 className="text-xl font-semibold">
-                        Diary Feed
-                    </h2>
-                </div>
+            <Card className={`shadow-md`}>
+                <PageHeader
+                    title="Diary Feed"
+                    description="Browse recent diary entries"
+                />
 
                 <div
                     className="overflow-auto max-h-[300px] p-2"
@@ -51,13 +51,13 @@ export default function HomePage() {
                 >
                     <Row gutter={[24, 24]} justify="start">
                         {diaries.map((item) => {
-                            const cleanedContent = item.content
-                                ?.replace(/!\[.*?\]\(.*?\)/g, '')
-                                .trim();
-
                             return (
                                 <Col
-                                    key={item.id}
+                                    key={
+                                        item.id ||
+                                        item.meta.id ||
+                                        item.meta.image
+                                    }
                                     xs={24}
                                     sm={24}
                                     md={16}
@@ -69,10 +69,10 @@ export default function HomePage() {
                                             cover={
                                                 item.meta.image ? (
                                                     <img
-                                                        src={
+                                                        src={getSizeOptimizedImageUrl(
                                                             item.meta
                                                                 .image
-                                                        }
+                                                        )}
                                                         alt="Diary"
                                                         className="h-48 w-full object-cover rounded-t-md"
                                                     />
