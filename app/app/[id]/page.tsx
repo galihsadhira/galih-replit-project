@@ -12,6 +12,7 @@ import {
 import PageHeader from '../components/PageHeader';
 import { ArrowLeftOutlined } from '@ant-design/icons';
 import Head from 'next/head';
+import EmbedRenderer from '../components/EmbedRenderer';
 
 type Section = {
     sectionTitle: string | null;
@@ -30,6 +31,7 @@ export default function DiaryPage() {
     const [contentDiary, setContentDiary] = useState<Section[]>([]);
     const [contentSEO, setContentSeo] = useState<SEO>();
     const router = useRouter();
+
     const seoTitle =
         diary?.content?.[0]?.meta?.title || 'Diary Entry';
     const seoDescription =
@@ -66,17 +68,9 @@ export default function DiaryPage() {
         fetchDiary();
     }, [id]);
 
-    if (loading) {
-        return <Skeleton active paragraph={{ rows: 10 }} />;
-    }
-
-    if (error) {
-        return <div className="p-4 text-red-600">{error}</div>;
-    }
-
-    if (!diary) {
-        return <div className="p-4">Diary not found</div>;
-    }
+    if (loading) return <Skeleton active paragraph={{ rows: 10 }} />;
+    if (error) return <div className="p-4 text-red-600">{error}</div>;
+    if (!diary) return <div className="p-4">Diary not found</div>;
 
     return (
         <div className="p-4">
@@ -166,32 +160,47 @@ export default function DiaryPage() {
                                     )}
                                     {section.content.map(
                                         (item, itemIdx) => {
-                                            if (
-                                                item.startsWith(
-                                                    '<TiktokEmbed'
-                                                )
-                                            ) {
-                                                const match =
-                                                    item.match(
-                                                        /url="([^"]+)"/
-                                                    );
-                                                const tiktokUrl =
-                                                    match?.[1];
+                                            const getEmbedTypeAndUrl =
+                                                (
+                                                    str: string
+                                                ):
+                                                    | [string, string]
+                                                    | null => {
+                                                    const match =
+                                                        str.match(
+                                                            /<(YoutubeEmbed|TwitterEmbed|InstagramEmbed|TiktokEmbed)[^>]*url="([^"]+)"[^>]*>/
+                                                        );
+                                                    if (!match)
+                                                        return null;
+                                                    const [
+                                                        ,
+                                                        type,
+                                                        url,
+                                                    ] = match;
+                                                    return [
+                                                        type.replace(
+                                                            'Embed',
+                                                            ''
+                                                        ),
+                                                        url,
+                                                    ];
+                                                };
+
+                                            const embed =
+                                                getEmbedTypeAndUrl(
+                                                    item
+                                                );
+                                            if (embed) {
+                                                const [type, url] =
+                                                    embed;
                                                 return (
-                                                    <div
+                                                    <EmbedRenderer
                                                         key={itemIdx}
-                                                        className="my-4"
-                                                    >
-                                                        <iframe
-                                                            src={
-                                                                tiktokUrl
-                                                            }
-                                                            width="100%"
-                                                            height="500"
-                                                            allow="autoplay; fullscreen"
-                                                            title="TikTok"
-                                                        ></iframe>
-                                                    </div>
+                                                        type={
+                                                            type as any
+                                                        }
+                                                        url={url}
+                                                    />
                                                 );
                                             } else if (
                                                 item.startsWith('![')
@@ -207,7 +216,6 @@ export default function DiaryPage() {
                                                         imgUrl,
                                                         'TH'
                                                     );
-
                                                 return (
                                                     <div
                                                         key={itemIdx}
@@ -219,6 +227,10 @@ export default function DiaryPage() {
                                                             }
                                                             alt="Diary content"
                                                             className="w-full h-auto object-cover rounded"
+                                                            style={{
+                                                                maxWidth:
+                                                                    '100%',
+                                                            }}
                                                         />
                                                     </div>
                                                 );
